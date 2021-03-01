@@ -18,6 +18,7 @@ router.get('/', ctx => ctx.render('index'))
 router.post('/upload', async ctx => {
   const file = ctx.request.files.file;
   const render = fs.createReadStream(file.path);
+  fs.mkdirSync(path.join(__dirname, '/src/public/img'), { recursive: true });
   const filePath = path.join(__dirname, '/src/public/img') + `/${new Date().getTime()}.png`;
   const writer = fs.createWriteStream(filePath);
 
