@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>js开启摄像头拍照并上传图片</title>
+</head>
+
+<body>
+
+    <video id="video" width="640" height="480" autoplay="autoplay"></video>
+    <canvas id="canvas" style="display: none;" width="640" height="480"></canvas>
+    <button onclick="openMedia()">开启摄像头</button>
+    <button id="capture" onclick="takePhoto()">拍照</button>
+    <button onclick="closeMedia()">关闭摄像头</button>
+    <div><img id="imgTag" src="" alt=""></div>
+    <script>
+        let video = document.getElementById("video");
+        let canvas = document.getElementById("canvas");
+        let context = canvas.getContext("2d");
+        // 开启摄像头
+        function openMedia() {
+            // 老的浏览器可能根本没有实现 mediaDevices，所以我们可以先设置一个空的对象
+            if (navigator.mediaDevices === undefined) {
+                navigator.mediaDevices = {};
+            }
+            // 一些浏览器部分支持 mediaDevices。我们不能直接给对象设置 getUserMedia
+            // 因为这样可能会覆盖已有的属性。这里我们只会在没有getUserMedia属性的时候添加它。
+            if (navigator.mediaDevices.getUserMedia === undefined) {
+                navigator.mediaDevices.getUserMedia = function (constraints) {
+
+                    // 首先，如果有getUserMedia的话，就获得它
+                    var getUserMedia = navigator.webkitGetUserMedia || navigator.mozGetUserMedia;
+
+                    // 一些浏览器根本没实现它 - 那么就返回一个error到promise的reject来保持一个统一的接口
+                    if (!getUserMedia) {
+                        return Promise.reject(new Error('getUserMedia is not implemented in this browser'));
+                    }
+
+                    // 否则，为老的navigator.getUserMedia方法包裹一个Promise
+                    return new Promise(function (resolve, reject) {
+                        getUserMedia.call(navigator, constraints, resolve, reject);
+                    });
+                }
+            }
+            //默认使用前摄像头，强制使用后置摄像头如下设置
+            // let constraints = {video: { facingMode: { exact: "environment" } }};
+            let constraints = { video: true };
+
+            return new Promise(function (resolve, reject) {
+                navigator.mediaDevices.getUserMedia(constraints)
+                    .then(function (stream) {
+                        // 旧的浏览器可能没有srcObject
+                        if ("srcObject" in video) {
+                            video.srcObject = stream;
+                        } else {
+                            video.src = window.URL.createObjectURL(stream);
+                        }
+                        video.onloadedmetadata = function (e) {
+                            video.play();
+                            resolve();
+                        };
+                    })
+                    .catch(function (err) {
+                        console.log(err.name + ": " + err.message);
+                        reject(err)
+                    });
+            });
+
+        }
+        // 拍照
+        function takePhoto() {
+            //绘制画面
+            context.drawImage(video, 0, 0, 640, 480);
+            // toDataURL  ---  可传入'image/png'---默认, 'image/jpeg'
+            let img = document.getElementById('canvas').toDataURL();
+            // 这里的img就是得到的图片
+            document.getElementById('imgTag').src = img;
+            const file = dataURLtoFile(img, 'file');
+            const formData = new FormData();
+            formData.append('file', file);
+            return new Promise(function (resolve, reject) {
+                fetch('/upload', {
+                    method: 'POST',
+                    body: formData
+                }).then(response => response.json())
+                    .catch(error => reject('Error:', error))
+                    .then(response => resolve('Success:', response));
+            })
+
+        }
+
+        // 关闭摄像头
+        function closeMedia() {
+            if ("srcObject" in video) {
+                let stream = video.srcObject;
+                let tracks = stream.getTracks();
+                tracks.forEach(function (track) {
+                    track.stop();
+                });
+                video.srcObject = null;
+            }
+        }
+
+        function dataURLtoFile(dataurl, filename) {
+            var arr = dataurl.split(','),
+                mime = arr[0].match(/:(.*?);/)[1],
+                bstr = atob(arr[1]),
+                n = bstr.length,
+                u8arr = new Uint8Array(n);
+            while (n--) {
+                u8arr[n] = bstr.charCodeAt(n);
+            }
+            return new File([u8arr], filename, { type: mime });
+        }
+
+    </script>
+</body>
+
+</html>
